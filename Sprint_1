@@ -1,0 +1,132 @@
+#include <Wire.h>
+#include <Adafruit_ADS1X15.h> // Librería para ADS1115
+
+// Pines y canales de los sensores
+#define SALINITY_POWER_PIN 5 // Pin que alimenta el sensor de salinidad
+#define TEMPERATURE_SENSOR_CHANNEL 0 // Canal del ADS1115 para el sensor de temperatura
+#define SALINITY_SENSOR_CHANNEL 1 // Canal del ADS1115 para el sensor de salinidad
+#define HUMIDITY_SENSOR_CHANNEL 2 // Canal del ADS1115 para el sensor de humedad
+
+Adafruit_ADS1115 ads; // Objeto para manejar el ADS1115
+
+// Variables de calibración
+float salinityCalibrationMin = 0;
+float salinityCalibrationMax = 0;
+int humidityCalibrationDry = 0;   // Valor en seco (0%)
+int humidityCalibrationWet = 0;   // Valor en agua (100%)
+
+int contador = 1; // Contador de iteraciones
+
+void waitForEnter() {
+  Serial.println("Presione 'Enter' para continuar...");
+  while (!Serial.available()); // Espera activa hasta que el usuario envíe algo
+  while (Serial.available()) Serial.read(); // Limpia el buffer serie
+}
+
+void calibrateSensors() {
+  Serial.println("Iniciando calibración de sensores...");
+  delay(1000);
+  
+  // Calibración del sensor de salinidad (mínima y máxima)
+  Serial.println("Sensor de Salinidad: Asegúrese de que el sensor esté sin sal.");
+  waitForEnter(); // Esperamos a que el usuario presione 'Enter'
+  int16_t rawSalinityMin = ads.readADC_SingleEnded(SALINITY_SENSOR_CHANNEL);
+  salinityCalibrationMin = rawSalinityMin;
+  Serial.print("Calibración de salinidad mínima establecida en: ");
+  Serial.println(salinityCalibrationMin);
+
+  Serial.println("Sensor de Salinidad: Llene un vaso con sal y sumerja el sensor.");
+  waitForEnter(); // Esperamos a que el usuario presione 'Enter'
+  int16_t rawSalinityMax = ads.readADC_SingleEnded(SALINITY_SENSOR_CHANNEL);
+  salinityCalibrationMax = rawSalinityMax;
+  Serial.print("Calibración de salinidad máxima establecida en: ");
+  Serial.println(salinityCalibrationMax);
+
+  // Calibración del sensor de humedad (0% y 100%)
+  Serial.println("Sensor de Humedad: Coloque el sensor en seco.");
+  waitForEnter(); // Esperamos a que el usuario presione 'Enter'
+  humidityCalibrationDry = ads.readADC_SingleEnded(HUMIDITY_SENSOR_CHANNEL);
+  Serial.print("Valor en seco (0% humedad): ");
+  Serial.println(humidityCalibrationDry);
+
+  Serial.println("Sensor de Humedad: Ahora coloque el sensor completamente sumergido en agua.");
+  waitForEnter(); // Esperamos a que el usuario presione 'Enter'
+  humidityCalibrationWet = ads.readADC_SingleEnded(HUMIDITY_SENSOR_CHANNEL);
+  Serial.print("Valor en agua (100% humedad): ");
+  Serial.println(humidityCalibrationWet);
+
+  Serial.println("Calibración completada.");
+}
+
+void setup() {
+  Serial.begin(9600);
+  while (!Serial) { // Esperamos a que se inicialice la comunicación serie
+    delay(10);
+  }
+
+  Serial.println("Inicializando sistema...");
+  ads.begin();
+  ads.setGain(GAIN_ONE); // Configuramos la ganancia del ADS1115
+
+  pinMode(SALINITY_POWER_PIN, OUTPUT);
+  digitalWrite(SALINITY_POWER_PIN, LOW); // Inicialmente apagado
+
+  // Llamamos a la calibración
+  calibrateSensors();
+}
+
+void loop() {
+  Serial.print("DATOS HUERTO VERTICAL VUELTA Nº ");
+  Serial.println(contador);
+
+  /////////////////////////////////////////////////////////////////////////////////////////
+  // SENSOR DE TEMPERATURA
+  /////////////////////////////////////////////////////////////////////////////////////////
+  int16_t rawTemperature = ads.readADC_SingleEnded(TEMPERATURE_SENSOR_CHANNEL);
+  float voltage = rawTemperature * 0.105 / 1000.0; // Conversión a voltios
+  float temperature = voltage * 10.0; // Ajuste para LM35 (10mV/°C)
+
+  Serial.print("Temperatura: ");
+  Serial.print(temperature);
+  Serial.print(" °C");
+  //Serial.print("   DatoDigitalTemperatura: "); // Activar si es necesario ver el dato digital leído de la temperatura
+  //Serial.println(rawTemperature);
+
+
+  delay(800);
+
+  /////////////////////////////////////////////////////////////////////////////////////////
+  // SENSOR DE HUMEDAD
+  /////////////////////////////////////////////////////////////////////////////////////////
+  int16_t rawHumidity = ads.readADC_SingleEnded(HUMIDITY_SENSOR_CHANNEL);
+  int humidityValue = map(rawHumidity, humidityCalibrationDry, humidityCalibrationWet, 0, 100); // Mapeo con calibración
+  humidityValue = constrain(humidityValue, 0, 100); // Limitamos el valor al rango [0, 100]
+
+  Serial.print("Humedad: ");
+  Serial.print(humidityValue);
+  Serial.println(" %");
+
+  delay(800);
+
+  /////////////////////////////////////////////////////////////////////////////////////////
+  // SENSOR DE SALINIDAD
+  /////////////////////////////////////////////////////////////////////////////////////////
+  int16_t rawSalinity = 0;
+
+  digitalWrite(SALINITY_POWER_PIN, HIGH);
+  delay(100); // Tiempo de estabilización
+
+  rawSalinity = ads.readADC_SingleEnded(SALINITY_SENSOR_CHANNEL);
+  int salinityValue = map(rawSalinity, salinityCalibrationMin, salinityCalibrationMax, 0, 100); // Mapeo con calibración
+  salinityValue = constrain(salinityValue, 0, 100); // Limitamos el valor al rango [0, 100]
+
+  digitalWrite(SALINITY_POWER_PIN, LOW);
+
+  Serial.print("Salinidad: ");
+  Serial.print(salinityValue);
+  Serial.println(" %");
+
+  delay(1000);
+
+  contador++;
+}
