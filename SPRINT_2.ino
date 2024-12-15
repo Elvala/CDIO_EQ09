@@ -1,0 +1,151 @@
+#include <Wire.h>
+#include <Adafruit_ADS1X15.h> // Librería para ADS1115
+
+// Pines y canales de los sensores
+#define SALINITY_POWER_PIN 5 // Pin que alimenta el sensor de salinidad
+#define TEMPERATURE_SENSOR_CHANNEL 0   // Canal del ADS1115 para el sensor de temperatura
+#define SALINITY_SENSOR_CHANNEL 1 // Canal del ADS1115 para el sensor de salinidad
+#define HUMIDITY_SENSOR_CHANNEL 2 // Canal del ADS1115 para el sensor de humedad
+#define PH_SENSOR_CHANNEL 3 // Canal del ADS1115 para el sensor de pH
+#define PH_OFFSET 0.00
+#define PH_ARRAY_LENGTH 40 // Número de muestras para el promedio
+
+Adafruit_ADS1115 ads; // Objeto para manejar el ADS1115
+
+// Variables para el sensor de pH
+float pHArray[PH_ARRAY_LENGTH]; // Almacena las muestras de pH
+int pHArrayIndex = 0;
+int contador = 1; // Contador de iteraciones
+
+void waitForEnter() {
+  Serial.println("Presione 'Enter' para continuar...");
+  while (!Serial.available()); // Espera activa hasta que el usuario envíe algo
+  while (Serial.available()) Serial.read(); // Limpia el buffer serie
+}
+
+float Temperatura() {
+  int16_t rawTemperature = ads.readADC_SingleEnded(TEMPERATURE_SENSOR_CHANNEL);
+  float voltage = rawTemperature * 0.105 / 1000.0; // Conversión a voltios
+  return voltage * 10.0; // Ajuste para LM35 (10mV/°C)
+}
+
+int Humedad() {
+  int16_t rawHumidity = ads.readADC_SingleEnded(HUMIDITY_SENSOR_CHANNEL);
+  int humidityValue = map(rawHumidity, 0, 32768, 0, 100); // Mapeo sin calibración
+  return constrain(humidityValue, 0, 100); // Limitamos el valor al rango [0, 100]
+}
+
+int Salinidad() {
+  digitalWrite(SALINITY_POWER_PIN, HIGH);
+  delay(100); // Tiempo de estabilización
+
+  int16_t rawSalinity = ads.readADC_SingleEnded(SALINITY_SENSOR_CHANNEL);
+
+  // Interpolación lineal para convertir el valor digital en gramos de sal
+  float salinityGrams = 0.0;
+  if (rawSalinity <= 255) {
+    salinityGrams = 0; // Valor mínimo
+  } else if (rawSalinity <= 860) {
+    salinityGrams = 5 * (rawSalinity - 255) / (860 - 255);
+  } else if (rawSalinity <= 900) {
+    salinityGrams = 10 * (rawSalinity - 860) / (900 - 860) + 5;
+  } else if (rawSalinity <= 925) {
+    salinityGrams = 15 * (rawSalinity - 900) / (925 - 900) + 10;
+  } else if (rawSalinity <= 940) {
+    salinityGrams = 20 * (rawSalinity - 925) / (940 - 925) + 15;
+  } else if (rawSalinity <= 1015) {
+    salinityGrams = 25 * (rawSalinity - 940) / (1015 - 940) + 20;
+  } else if (rawSalinity <= 1024) {
+    salinityGrams = 30 * (rawSalinity - 1015) / (1024 - 1015) + 25;
+  } else if (rawSalinity > 1024) {
+    salinityGrams = 30; // Valor máximo
+  }
+
+  digitalWrite(SALINITY_POWER_PIN, LOW);
+
+  // Retornar el valor calculado de salinidad
+  return salinityGrams;
+}
+
+float PH() {
+  static unsigned long samplingTime = millis();
+  static float pHValue = 0.0;
+
+  if (millis() - samplingTime > 1000) { // Tomar una muestra cada segundo
+    pHArray[pHArrayIndex++] = ads.readADC_SingleEnded(PH_SENSOR_CHANNEL);
+
+    if (pHArrayIndex == PH_ARRAY_LENGTH) {
+      pHArrayIndex = 0; // Reiniciar el índice
+    }
+
+    // Promediar las muestras
+    float average = 0;
+    for (int i = 0; i < PH_ARRAY_LENGTH; i++) {
+      average += pHArray[i];
+    }
+    average /= PH_ARRAY_LENGTH;
+
+    // Convertir el valor promedio a voltaje y calcular el pH
+    float voltage = (average * 4.096) / 32768.0;
+    pHValue = 3.5 * voltage + PH_OFFSET;
+
+    samplingTime = millis();
+  }
+
+  return pHValue;
+}
+
+void setup() {
+  Serial.begin(9600);
+  while (!Serial) { // Esperamos a que se inicialice la comunicación serie
+    delay(10);
+  }
+
+  Serial.println("Inicializando sistema...");
+  ads.begin();
+  ads.setGain(GAIN_ONE); // Configuramos la ganancia del ADS1115
+
+  pinMode(SALINITY_POWER_PIN, OUTPUT);
+  digitalWrite(SALINITY_POWER_PIN, LOW); // Inicialmente apagado
+}
+
+void loop() {
+  Serial.print("DATOS HUERTO VERTICAL VUELTA Nº ");
+  Serial.println(contador);
+
+  // Leer y mostrar temperatura
+  float temperature = Temperatura();
+  Serial.print("Temperatura: ");
+  Serial.print(temperature);
+  Serial.println("°C");
+
+  delay(800);
+
+  // Leer y mostrar humedad
+  int humidityValue = Humedad();
+  Serial.print("Humedad: ");
+  Serial.print(humidityValue);
+  Serial.println(" %");
+
+  delay(800);
+
+  // Leer y mostrar salinidad
+  int salinityValue = Salinidad();
+  if (salinityValue > 30) {
+    Serial.print("+30 g");
+  } else {
+    Serial.print(salinityValue);
+    Serial.print(" g");
+  }
+
+  delay(800);
+
+  // Leer y mostrar pH
+  float pHValue = PH();
+  Serial.print("pH: ");
+  Serial.println(pHValue, 2);
+
+  delay(800);
+
+  contador++;
+}
