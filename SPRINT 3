@@ -1,22 +1,23 @@
-  #include <Wire.h>
+   #include <Wire.h>
   #include <Adafruit_ADS1X15.h> // Librería para ADS1115
 
   // Pines y canales de los sensores
-  #define SALINITY_POWER_PIN 4 // Pin que alimenta el sensor de salinidad
-  #define TEMPERATURE_SENSOR_CHANNEL 5   // Canal del ADS1115 para el sensor de temperatura
-  #define SALINITY_SENSOR_CHANNEL 1 // Canal del ADS1115 para el sensor de salinidad
+  #define SALINITY_POWER_PIN 5 // Pin que alimenta el sensor de salinidad
+  #define TEMPERATURE_SENSOR_CHANNEL 1   // Canal del ADS1115 para el sensor de temperatura
+  #define SALINITY_SENSOR_CHANNEL A0 // Canal del ADS1115 para el sensor de salinidad
   #define HUMIDITY_SENSOR_CHANNEL 2 // Canal del ADS1115 para el sensor de humedad
-  #define PH_SENSOR_CHANNEL 3 // Canal del ADS1115 para el sensor de pH
-  #define PH_OFFSET 0.00
+  #define PH_SENSOR_CHANNEL 0 // Canal del ADS1115 para el sensor de pH
+  #define PH_OFFSET -1.00
   #define PH_ARRAY_LENGTH 40 // Número de muestras para el promedio
-  #define LUZ_SENSOR_CHANNEL 0
+  #define LUZ_SENSOR_CHANNEL 3
+
   Adafruit_ADS1115 ads; // Objeto para manejar el ADS1115
 
   //A continuación declaramos valores globales, los cuales se usan en diferentes funciones
 
   // Variables para el sensor de Luz
-  double umbralOscuridad[] = {500,1500,3000,4000};
-  int lum=1;
+  double umbralOscuridad[] = {700,4000,13000,21000};
+  float lum=1;
 
   // Variables para el sensor de Humedad
   int humidityCalibrationDry;
@@ -131,7 +132,7 @@
   int Luz(){
 
     int16_t lecturaADClum = ads.readADC_SingleEnded(LUZ_SENSOR_CHANNEL);
-
+    
     if (lecturaADClum < umbralOscuridad[0]) {
       lum = 0;
     } 
@@ -147,6 +148,8 @@
       else{
        lum = 100;
       }
+
+    //lum = lecturaADClum; //Comprabar el valor digital del sensor (DEJAR COMENTADO)
 
     return lum;
   }
@@ -209,7 +212,7 @@
     // Leer y mostrar Luz
     int luminosidad = Luz();
     Serial.print("Luz: ");
-    Serial.println(luminosidad);
+    Serial.print(luminosidad);
     Serial.println("%");
     Serial.println("");
 
