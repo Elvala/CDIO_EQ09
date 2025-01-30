@@ -1,7 +1,7 @@
-   #include <Wire.h>
-  #include <Adafruit_ADS1X15.h> // Librería para ADS1115
+#include <Wire.h>
+#include <Adafruit_ADS1X15.h> // Librería para ADS1115
 
-  // Pines y canales de los sensores
+   // Pines y canales de los sensores
   #define SALINITY_POWER_PIN 5 // Pin que alimenta el sensor de salinidad
   #define TEMPERATURE_SENSOR_CHANNEL 1   // Canal del ADS1115 para el sensor de temperatura
   #define SALINITY_SENSOR_CHANNEL A0 // Canal del ADS1115 para el sensor de salinidad
